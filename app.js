@@ -3,12 +3,27 @@ var express = require("express");
 var path = require("path");
 var cookieParser = require("cookie-parser");
 var logger = require("morgan");
+const cors = require("cors"); // ✅ CORS
 
 var indexRouter = require("./routes/index");
 var usersRouter = require("./routes/users");
-var trackRouter = require("./routes/track"); // ✅ add
+var trackRouter = require("./routes/track");
 
 var app = express();
+
+// ✅ Enable CORS for local dev + Netlify frontend
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://rutvik-music-app.netlify.app",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
 // view engine setup
 app.set("views", path.join(__dirname, "views"));
@@ -20,9 +35,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
+// ✅ Routes
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
-app.use("/api/track", trackRouter); // ✅ add
+app.use("/api/track", trackRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {

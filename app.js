@@ -3,15 +3,16 @@ var express = require("express");
 var path = require("path");
 var cookieParser = require("cookie-parser");
 var logger = require("morgan");
-const cors = require("cors"); // ✅ CORS
+const cors = require("cors");
 
 var indexRouter = require("./routes/index");
 var usersRouter = require("./routes/users");
 var trackRouter = require("./routes/track");
+var googleRouter = require("./routes/google");
 
 var app = express();
 
-// ✅ Enable CORS for local dev + Netlify frontend
+// ✅ Enable CORS
 app.use(
   cors({
     origin: [
@@ -39,8 +40,9 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
 app.use("/api/track", trackRouter);
+app.use("/google", googleRouter); // ✅ mounted here
 
-// catch 404 and forward to error handler
+// catch 404
 app.use(function (req, res, next) {
   next(createError(404));
 });

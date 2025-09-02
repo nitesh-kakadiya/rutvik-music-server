@@ -1,56 +1,90 @@
-// routes/google.js
+// backend/routes/google.js
 const express = require("express");
 const { google } = require("googleapis");
+const fs = require("fs");
+const path = require("path");
+require("dotenv").config();
 
 const router = express.Router();
 
-const CLIENT_ID =
-    "227987761311-v7tkugsgqrrha2sas85rfq2ioo3aa951.apps.googleusercontent.com";
-const CLIENT_SECRET = "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";
-const REDIRECT_URI = "http://localhost:5000/google/oauth2callback"; // ✅ matches app.js mount
+const TOKEN_PATH = path.join(__dirname, "../token.json");
 
 const oAuth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    REDIRECT_URI
+    process.env.CLIENT_ID,
+    process.env.CLIENT_SECRET,
+    `${process.env.BACKEND_URL}/google/oauth2callback`
 );
 
-// 🔹 Replace this with your real Nitesh folder ID from Google Drive
-const FOLDER_ID = "1p1lPiKU5vbfI4AnSbvc2IDmlctovF0f4";
+// 🔹 Load token from file if available
+if (fs.existsSync(TOKEN_PATH)) {
+    try {
+        const token = JSON.parse(fs.readFileSync(TOKEN_PATH, "utf8"));
+        oAuth2Client.setCredentials(token);
+        console.log("✅ Loaded saved Google token");
+    } catch (err) {
+        console.error("❌ Failed to load token.json", err);
+    }
+}
 
-// Step 1 → Login
+// 🔹 Generate login URL
 router.get("/login", (req, res) => {
-    const SCOPES = ["https://www.googleapis.com/auth/drive.readonly"];
-    const url = oAuth2Client.generateAuthUrl({
+    const authUrl = oAuth2Client.generateAuthUrl({
         access_type: "offline",
-        scope: SCOPES,
+        scope: ["https://www.googleapis.com/auth/drive.readonly"],
+        prompt: "consent",
     });
-    res.redirect(url);
+    res.redirect(authUrl);
 });
 
-// Step 2 → Callback
+// 🔹 OAuth callback
 router.get("/oauth2callback", async (req, res) => {
+    const code = req.query.code;
+    if (!code) return res.status(400).send("Missing code");
+
     try {
-        const code = req.query.code;
         const { tokens } = await oAuth2Client.getToken(code);
         oAuth2Client.setCredentials(tokens);
-        res.send("✅ Google Login Successful. Now you can call /google/songs");
+
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+        console.log("✅ Token saved to", TOKEN_PATH);
+
+        res.send("✅ Google Drive connected! You can now return to your app.");
     } catch (err) {
-        res.status(500).send("Auth Error: " + err.message);
+        console.error("OAuth error:", err);
+        res.status(500).send("Authentication failed");
     }
 });
 
-// Step 3 → Fetch Songs (only from Nitesh folder)
+// 🔹 List songs from Google Drive
 router.get("/songs", async (req, res) => {
     try {
         const drive = google.drive({ version: "v3", auth: oAuth2Client });
+
+        let query = "mimeType='audio/mpeg'";
+        if (process.env.FOLDER_ID) {
+            query += ` and '${process.env.FOLDER_ID}' in parents`;
+        }
+
         const response = await drive.files.list({
-            q: `'${FOLDER_ID}' in parents and mimeType='audio/mpeg'`, // filter by folder
-            fields: "files(id, name, webContentLink)",
+            q: query,
+            fields: "files(id, name)",
+            pageSize: 50,
         });
-        res.json(response.data.files);
+
+        const songs = response.data.files.map((file) => {
+            const [title, artist] = file.name.split(" - ");
+            return {
+                id: file.id,
+                title: title || file.name,
+                artist: artist || "Unknown Artist",
+                url: `https://drive.google.com/uc?export=download&id=${file.id}`,
+            };
+        });
+
+        res.json(songs);
     } catch (err) {
-        res.status(500).send("Drive Error: " + err.message);
+        console.error("Error fetching songs:", err.message);
+        res.status(500).json({ error: "Failed to fetch songs" });
     }
 });
 

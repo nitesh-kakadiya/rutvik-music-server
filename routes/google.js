@@ -9,6 +9,7 @@ const router = express.Router();
 
 const TOKEN_PATH = path.join(__dirname, "../token.json");
 
+// OAuth2 client
 const oAuth2Client = new google.auth.OAuth2(
     process.env.CLIENT_ID,
     process.env.CLIENT_SECRET,
@@ -75,8 +76,8 @@ router.get("/songs", async (req, res) => {
             const [title, artist] = file.name.split(" - ");
             return {
                 id: file.id,
-                title: title || file.name,
-                artist: artist || "Unknown Artist",
+                title: title?.trim() || file.name,
+                artist: artist?.trim() || "Unknown Artist",
                 url: `https://drive.google.com/uc?export=download&id=${file.id}`,
             };
         });
@@ -86,6 +87,22 @@ router.get("/songs", async (req, res) => {
         console.error("Error fetching songs:", err.message);
         res.status(500).json({ error: "Failed to fetch songs" });
     }
+});
+
+
+// ======================================================
+// 🔹 Save & Load Last Played Track (new endpoints)
+// ======================================================
+let lastTrack = {};
+
+router.get("/lastTrack", (req, res) => {
+    res.json(lastTrack || {});
+});
+
+router.post("/lastTrack", (req, res) => {
+    lastTrack = req.body || {};
+    console.log("💾 Last track updated:", lastTrack);
+    res.json({ status: "ok" });
 });
 
 module.exports = router;
